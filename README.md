@@ -1,6 +1,6 @@
 # strands-code-agent
 
-A coding agent built on [Strands Agents SDK](https://github.com/strands-agents/sdk-python) that replaces the tool-calling paradigm with code generation as the agent's primary action interface. Rather than invoking structured tools by name and passing results through the conversation context, the agent writes Python code in a persistent REPL where domain capabilities (database queries, APIs, etc.) are exposed as importable library functions. This keeps intermediate data as native Python objects in memory and lets the agent compose multi-step logic in a single code block instead of orchestrating sequential tool calls. In empirical evaluations on the Data Agent Benchmark, this code-generation paradigm achieves higher accuracy (+7%) while consuming 78% fewer input tokens, completing tasks 56% faster, and requiring 35% fewer reasoning cycles compared to an equivalent tool-calling agent. The library makes it easy to configure the Python environment with the libraries and domain-specific code your agent needs.
+A coding agent built on [Strands Agents SDK](https://github.com/strands-agents/sdk-python) that replaces the tool-calling paradigm with code generation as the agent's primary action interface. Rather than invoking structured tools by name and passing results through the conversation context, the agent writes Python code in a persistent REPL where domain capabilities (database queries, APIs, etc.) are exposed as importable library functions. This keeps intermediate data as native Python objects in memory and lets the agent compose multi-step logic in a single code block instead of orchestrating sequential tool calls. In empirical evaluations on the Data Agent Benchmark, this code-generation paradigm achieves higher accuracy (+7%) while consuming 78% fewer input tokens, 67% fewer output tokens, completing tasks 56% faster, and requiring 35% fewer reasoning cycles compared to an equivalent tool-calling agent. The library makes it easy to configure the Python environment with the libraries and domain-specific code your agent needs.
 
 ## Installation
 
@@ -135,3 +135,10 @@ See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more inform
 ## License
 
 This library is licensed under the MIT-0 License. See the LICENSE file.
+
+## Example Agents
+
+Example agents built with this library:
+
+- [Data Analyst Agent](https://github.com/aws-solutions-library-samples/guidance-for-agentic-data-analyst-using-amazon-bedrock-agentcore-on-aws/blob/main/agent/aws_data_analyst/data_analyst_agent.py#L92)
+- [Geospatial Agent](https://github.com/aws-samples/sample-geospatial-code-agent/blob/main/agent/geospatial_agent/agent.py#L93)
