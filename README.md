@@ -13,7 +13,7 @@ pip install strands-code-agent
 ```python
 from strands_code_agent import CodeAgent
 
-agent = CodeAgent(system_prompt="You are a helpful data analyst.")
+agent = CodeAgent()
 
 response = agent("What is 2 ** 10?")
 ```

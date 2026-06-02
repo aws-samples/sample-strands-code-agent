@@ -6,6 +6,7 @@ from jinja2 import Template
 from strands_code_agent.document_code import get_documentation
 from strands_code_agent.python_environments.local_sandboxed import SandboxedPythonInterpreter
 from strands_code_agent.imports import get_import_string, extract_imports
+from strands_code_agent.callback_handler import CodeAgentCallbackHandler
 
 
 CODE_AGENT_INSTRUCTIONS = """
@@ -31,6 +32,8 @@ DOMAIN_SPECIFIC_DOC_TEMPLATE = Template("""
 You can use the following Domain Specific Code:
 {{SYMBOLS_DOCUMENTATION}}
 """)
+
+DEFAULT_CODE_AGENT_CALLBACK_HANDLER = CodeAgentCallbackHandler()
 
 
 class CodeAgent(Agent):
@@ -76,8 +79,9 @@ class CodeAgent(Agent):
                  tools:list|None=None,
                  toolkits:list|None=None,
                  tmp_dir=True,
-                 timeout_seconds=60,
+                 timeout_seconds=180,
                  python_interpreter_class=SandboxedPythonInterpreter,
+                 callback_handler=DEFAULT_CODE_AGENT_CALLBACK_HANDLER,
                  **kwargs):
         authorized_imports = set()
         initialization_code = []
@@ -134,9 +138,10 @@ class CodeAgent(Agent):
             tools.append(python_repl_tool)
         else:
             tools = [python_repl_tool]
-        
+
         kwargs.update({
             "system_prompt": system_prompt,
-            "tools": tools
+            "tools": tools,
+            "callback_handler": callback_handler
         })
         super().__init__(**kwargs)
