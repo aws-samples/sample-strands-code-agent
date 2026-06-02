@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "strands-code-agent"
-version = "0.1.0"
+version = "0.2.0"
 description = "A coding agent built on Strands Agents SDK that uses code generation as the primary action interface"
 readme = "README.md"
 license = "MIT-0"
