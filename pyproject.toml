@@ -31,7 +31,16 @@ dependencies = [
     "rich>=13.0",
 ]
 
+[project.optional-dependencies]
+agentcore = ["boto3>=1.35.0"]
+
 [project.urls]
 Homepage = "https://github.com/aws-samples/sample-strands-code-agent"
 Repository = "https://github.com/aws-samples/sample-strands-code-agent"
 Issues = "https://github.com/aws-samples/sample-strands-code-agent/issues"
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: live integration tests requiring AWS credentials (deselected by default)",
+]
+addopts = "-m 'not integration'"

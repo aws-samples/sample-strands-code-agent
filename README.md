@@ -30,7 +30,8 @@ The agent receives a `python_repl` tool automatically and solves tasks by writin
 | `tools` | `list \| None` | Additional tools alongside the built-in Python REPL. |
 | `toolkits` | `list[Toolkit] \| None` | Toolkits that configure the REPL environment (see below). |
 | `tmp_dir` | `bool` | If `True` (default), creates a temp directory and documents its path in the prompt. |
-| `python_interpreter_class` | `type[PythonInterpreter]` | The interpreter backend. Defaults to `SandboxedPythonInterpreter` (import restrictions via allowlist). Use `ExecPythonInterpreter` for lightweight unrestricted `exec()`-based execution. |
+| `python_interpreter_class` | `type[PythonInterpreter]` | The interpreter backend. Defaults to `SandboxedPythonInterpreter` (import restrictions via allowlist). Use `ExecPythonInterpreter` for lightweight unrestricted `exec()`-based execution, or `AgentCorePythonInterpreter` for remote execution via AWS. |
+| `python_interpreter_kwargs` | `dict \| None` | Extra keyword arguments forwarded to the interpreter constructor (e.g. `{"region": "us-east-1"}` for `AgentCorePythonInterpreter`). |
 | `**kwargs` | | Forwarded to the Strands `Agent` base class (e.g. `model`, `callback_handler`). |
 
 ## Toolkit
@@ -119,6 +120,83 @@ agent = CodeAgent(
 )
 ```
 
+## Python Interpreters
+
+The library provides three interpreter backends. All share the same interface (`execute_code`, `clear_state`) and work transparently with `CodeAgent` and `Toolkit`.
+
+### SandboxedPythonInterpreter (default)
+
+Local execution with import restrictions. Only modules listed in `authorized_imports` (from Toolkit `libraries`) can be imported.
+
+```python
+from strands_code_agent import CodeAgent
+
+agent = CodeAgent()  # uses SandboxedPythonInterpreter by default
+```
+
+### ExecPythonInterpreter
+
+Local execution via `exec()` with no import restrictions. Lightweight and fast, suitable for trusted environments.
+
+```python
+from strands_code_agent import CodeAgent
+from strands_code_agent.python_environments.local_exec import ExecPythonInterpreter
+
+agent = CodeAgent(python_interpreter_class=ExecPythonInterpreter)
+```
+
+### AgentCorePythonInterpreter
+
+Remote execution via [Amazon Bedrock AgentCore Code Interpreter](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/code-interpreter-tool.html). Code runs in a secure, managed sandbox with 200+ pre-installed libraries (pandas, numpy, scikit-learn, torch, boto3, etc.).
+
+```bash
+pip install strands-code-agent[agentcore]
+```
+
+```python
+from strands_code_agent import CodeAgent, AgentCorePythonInterpreter
+
+agent = CodeAgent(
+    python_interpreter_class=AgentCorePythonInterpreter,
+    python_interpreter_kwargs={"region": "us-east-1"},
+)
+```
+
+**Configuration options** (passed via `python_interpreter_kwargs`):
+
+| Parameter | Default | Description |
+|---|---|---|
+| `region` | `"us-east-1"` | AWS region |
+| `code_interpreter_identifier` | `"aws.codeinterpreter.v1"` | Managed or custom Code Interpreter ID |
+| `session_timeout_seconds` | `900` | Session idle timeout (max 28800 = 8 hours) |
+
+**Requirements:**
+- AWS credentials configured (`aws sts get-caller-identity`)
+- IAM permissions: `bedrock-agentcore:StartCodeInterpreterSession`, `InvokeCodeInterpreter`, `StopCodeInterpreterSession`
+
+**Key differences from local interpreters:**
+- `libraries` in Toolkit is ignored (the remote environment has its own pre-installed packages)
+- `domain_specific_code` functions/classes are automatically serialized as source code and sent to the remote session
+- Sessions are stateful across tool calls but reset on `clear_state()`
+
+**Lifecycle and cost:**
+
+The AgentCore Code Interpreter uses **active consumption-based pricing** — you pay only for actual CPU and memory consumed, not for idle/I/O wait time:
+
+| Resource | Price |
+|---|---|
+| CPU | $0.0895 per vCPU-hour (billed per second, only during active computation) |
+| Memory | $0.00945 per GB-hour (billed per second, based on peak memory) |
+
+Key lifecycle details:
+- **Lazy start** — no session created until code actually runs
+- **One session per agent turn** — multiple `execute_code()` calls within the same LLM response share one session (no extra start/stop cost)
+- **Reset between turns** — `clear_state()` stops the session; next call starts fresh
+- **I/O wait is free** — while the agent is thinking (waiting for LLM response), no CPU is billed
+- **Auto-termination** — sessions terminate after `session_timeout_seconds` of inactivity if `close()` is not called
+
+**Example**: An agent that runs 3 code executions per request, each 2 minutes long with 60% I/O wait, using 2 vCPU and 4GB memory costs ~$0.0036 per request ($109/month at 30K executions). See [AgentCore pricing](https://aws.amazon.com/bedrock/agentcore/pricing/) for full details.
+
 ## Running Tests
 
 The test suite uses [pytest](https://docs.pytest.org/). Install it and run from the project root:
@@ -127,6 +205,19 @@ The test suite uses [pytest](https://docs.pytest.org/). Install it and run from 
 pip install pytest
 python -m pytest tests/ -v
 ```
+
+### Integration Tests (AgentCore)
+
+The AgentCore interpreter tests use mocked boto3 by default and run with the standard test suite. To run a live integration test against the real AgentCore service:
+
+```bash
+pip install strands-code-agent[agentcore]
+python -m pytest tests/test_agentcore_python_interpreter.py -v -k "integration"
+```
+
+**Prerequisites for live tests:**
+- AWS credentials configured with AgentCore permissions
+- Environment variable: `AWS_REGION` (defaults to `us-east-1`)
 
 ## Security
 

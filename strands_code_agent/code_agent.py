@@ -81,6 +81,7 @@ class CodeAgent(Agent):
                  tmp_dir=True,
                  timeout_seconds=180,
                  python_interpreter_class=SandboxedPythonInterpreter,
+                 python_interpreter_kwargs:dict|None=None,
                  callback_handler=DEFAULT_CODE_AGENT_CALLBACK_HANDLER,
                  **kwargs):
         authorized_imports = set()
@@ -132,6 +133,7 @@ class CodeAgent(Agent):
             authorized_imports=authorized_imports,
             additional_functions=additional_functions,
             timeout_seconds=timeout_seconds,
+            **(python_interpreter_kwargs or {}),
         )
         python_repl_tool = self.python_repl.get_tool()
         if tools is not None:
