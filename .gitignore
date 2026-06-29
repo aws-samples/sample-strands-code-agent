@@ -28,3 +28,7 @@ htmlcov/
 # Development
 dev/
 wiki/
+
+# Examples (generated)
+examples/pdf_to_okf_bundle/agentcore_bundle/
+examples/pdf_to_okf_bundle/bedrock_agentcore_guide.pdf

@@ -197,6 +197,62 @@ Key lifecycle details:
 
 **Example**: An agent that runs 3 code executions per request, each 2 minutes long with 60% I/O wait, using 2 vCPU and 4GB memory costs ~$0.0036 per request ($109/month at 30K executions). See [AgentCore pricing](https://aws.amazon.com/bedrock/agentcore/pricing/) for full details.
 
+## Knowledge Module
+
+The `strands_code_agent.knowledge` module provides tools for giving a CodeAgent access to large structured documents via the [Open Knowledge Format (OKF)](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md).
+
+### Convert a PDF to an OKF bundle
+
+```python
+from strands_code_agent.knowledge import pdf_to_okf_bundle
+
+pdf_to_okf_bundle("guide.pdf", "my_bundle/")
+```
+
+Uses the PDF's table-of-contents bookmarks to extract a hierarchy of concepts. Requires `pymupdf`.
+
+### Navigate a bundle with CodeAgent
+
+```python
+from strands_code_agent import CodeAgent, Toolkit
+from strands_code_agent.knowledge import OKFBundle
+
+agent = CodeAgent(
+    system_prompt="You have access to `docs`, an OKFBundle. Use docs.find(query) then docs.read(id).",
+    toolkits=[
+        Toolkit(
+            initialization_code='from strands_code_agent.knowledge import OKFBundle\ndocs = OKFBundle("my_bundle/")',
+            domain_specific_code=[OKFBundle],
+        )
+    ],
+)
+```
+
+The agent sees a minimal 4-method API:
+
+| Method | Purpose |
+|---|---|
+| `find(query)` | Keyword search with AND logic + OR fallback. Returns top 5 matches. |
+| `read(concept_id)` | Read a concept's full content with metadata and links. |
+| `children(concept_id)` | List subsections of a concept for hierarchical drilling. |
+| `toc()` | Show top-level sections (fallback when search fails). |
+
+### Custom search backend
+
+The default search uses keyword matching. Provide a custom backend for semantic search:
+
+```python
+from strands_code_agent.knowledge import OKFBundle, SearchIndex
+
+class EmbeddingSearch(SearchIndex):
+    def build(self, concepts): ...    # compute embeddings
+    def query(self, query, top_k=10): ...  # cosine similarity
+
+bundle = OKFBundle("my_bundle/", search_index=EmbeddingSearch())
+```
+
+See [`examples/pdf_to_okf_bundle/`](examples/pdf_to_okf_bundle/) for a complete working example using a 2500+ page PDF.
+
 ## Running Tests
 
 The test suite uses [pytest](https://docs.pytest.org/). Install it and run from the project root:
