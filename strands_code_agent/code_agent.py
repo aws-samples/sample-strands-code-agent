@@ -102,6 +102,16 @@ class CodeAgent(Agent):
         additional_functions = {}
         domain_specific_doc = ""
         if domain_specific_code:
+            # MCP-backed functions close over a live client on the host and cannot be
+            # serialized for remote execution. Fail fast rather than silently dropping them.
+            if python_interpreter_class.__name__ == "AgentCorePythonInterpreter" and any(
+                getattr(sym, "__mcp_tool__", False) for sym in domain_specific_code
+            ):
+                raise ValueError(
+                    "MCPToolkit functions cannot run on AgentCorePythonInterpreter "
+                    "(they call a live MCP client on the host). Use the default "
+                    "SandboxedPythonInterpreter or ExecPythonInterpreter instead."
+                )
             authorized_imports.update(sym.__module__ for sym in domain_specific_code if sym.__module__ != "__main__")
             initialization_code.append(get_import_string(domain_specific_code))
             sym_doc =  "\n".join([get_documentation(sym) for sym in domain_specific_code])

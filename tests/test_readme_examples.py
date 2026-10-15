@@ -126,3 +126,50 @@ class TestReadmeCombiningToolkits:
         assert "(1, 1)" in stdout
         stdout, _ = agent.python_repl.execute_code("print(plt.figure())")
         assert "Figure" in stdout
+
+
+# ---------------------------------------------------------------------------
+# MCP Tools — MCPToolkit (README "MCP Tools" section)
+# ---------------------------------------------------------------------------
+
+class _FakeMCPTool:
+    def __init__(self, spec):
+        self.tool_spec = spec
+
+
+class _FakeMCPClient:
+    """Stands in for an open strands MCPClient (no server/model needed)."""
+
+    def list_tools_sync(self):
+        return [
+            _FakeMCPTool({
+                "name": "count_pending",
+                "description": "Count pending orders.",
+                "inputSchema": {"json": {"type": "object", "properties": {}}},
+            })
+        ]
+
+    def call_tool_sync(self, tool_use_id, name, arguments=None, **kwargs):
+        return {"content": [], "structuredContent": {"result": 41}}
+
+
+class TestReadmeMCPToolkit:
+    def test_public_imports(self):
+        from strands_code_agent import CodeAgent, MCPToolkit
+        assert CodeAgent is not None and MCPToolkit is not None
+
+    def test_mcp_tool_callable_in_repl(self):
+        from strands_code_agent import CodeAgent, MCPToolkit
+        with patch("strands_code_agent.code_agent.Agent.__init__", return_value=None):
+            agent = CodeAgent(toolkits=[MCPToolkit(_FakeMCPClient())], tmp_dir=False)
+        stdout, stderr = agent.python_repl.execute_code("print(count_pending())")
+        assert stderr == ""
+        assert "41" in stdout
+
+    def test_mcp_tool_documented_in_prompt(self):
+        from strands_code_agent import CodeAgent, MCPToolkit
+        with patch("strands_code_agent.code_agent.Agent.__init__", return_value=None) as mock_init:
+            CodeAgent(toolkits=[MCPToolkit(_FakeMCPClient())], tmp_dir=False)
+        prompt = mock_init.call_args[1]["system_prompt"]
+        assert "count_pending" in prompt
+        assert "Count pending orders." in prompt

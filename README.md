@@ -120,6 +120,67 @@ agent = CodeAgent(
 )
 ```
 
+## MCP Tools
+
+`MCPToolkit` exposes an [MCP (Model Context Protocol)](https://modelcontextprotocol.io/)
+server's tools to a `CodeAgent` as **local Python functions**. Instead of loading every
+tool definition into the model's context and routing every result back through the model
+(the default tool-calling pattern), each MCP tool becomes a function the agent calls from
+the REPL — and it returns a **native Python object**, not a serialized blob. The agent can
+list, filter, join, and aggregate results in a single code block, keeping large
+intermediate data out of the model's context. This is the ["code execution with MCP"](https://www.anthropic.com/engineering/code-execution-with-mcp)
+pattern.
+
+```python
+from mcp import StdioServerParameters, stdio_client
+from strands.tools.mcp import MCPClient
+from strands_code_agent import CodeAgent, MCPToolkit
+
+client = MCPClient(lambda: stdio_client(
+    StdioServerParameters(command="python", args=["my_server.py"])))
+
+# The MCP session must be open when the toolkit is built (it lists the tools)
+# and must stay open while the agent runs (tool calls route to the live session).
+with client:
+    agent = CodeAgent(toolkits=[MCPToolkit(client)])
+    agent("How many orders are pending?")
+```
+
+For each tool, `MCPToolkit`:
+
+1. Reads the tool's name, description, and JSON input schema from the server.
+2. Synthesizes a Python function with a real typed signature and docstring (so the agent
+   sees it exactly like hand-written `domain_specific_code`).
+3. Wires it into the REPL; calling it invokes `MCPClient.call_tool_sync` and unwraps the
+   result's `structuredContent` into a native object.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `mcp_client` | `MCPClient` | An **open** Strands MCP client (inside its `with` block / after `start()`). |
+| `tool_filter` | `Iterable[str] \| None` | If given, only expose tools with these names. |
+| `usage_instructions` | `str \| None` | Extra system-prompt guidance; a sensible default is provided. |
+
+> **Interpreter support:** MCP functions call a live client on the host, so use a local
+> interpreter (`SandboxedPythonInterpreter` default, or `ExecPythonInterpreter`).
+> `AgentCorePythonInterpreter` is not supported for MCP tools and raises a clear error.
+
+See [`examples/mcp_tools/`](examples/mcp_tools/) for a complete, reproducible example with
+a self-contained MCP server and a baseline-vs-CodeAgent benchmark (temperature 0.1,
+averaged over 5 runs). On a 5-task order-analytics workload, calling the MCP tools as code
+cuts tokens and cost and improves accuracy, because data is aggregated in the sandbox
+instead of being summed by the model in-context:
+
+| metric | baseline (tool-calling) | codeagent (MCP as code) | change |
+|---|---:|---:|---:|
+| input tokens | ~55,400 | ~25,700 | **−52% to −55%** |
+| cost | ~$0.197 | ~$0.100 | **−47% to −51%** |
+| accuracy | 80% | 100% | **+20pp** |
+| model cycles (sequential task) | 6 | ~2 | **≈ −66%** |
+
+On the sequential-dependency task the CodeAgent writes one loop instead of a chain of tool
+calls, so it resolves the whole chain in ~2 model cycles versus the baseline's 6 (one turn
+per hop).
+
 ## Python Interpreters
 
 The library provides three interpreter backends. All share the same interface (`execute_code`, `clear_state`) and work transparently with `CodeAgent` and `Toolkit`.
