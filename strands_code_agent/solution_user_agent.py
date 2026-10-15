@@ -4,7 +4,7 @@ the User-Agent tags of the botocore calls.
 """
 import botocore.session
 
-SOLUTION_UA = "AWSSOLUTION/SO0353/v0.4.0"
+SOLUTION_UA = "AWSSOLUTION/SO0353/v0.5.0"
 
 
 _orig_init = botocore.session.Session.__init__
