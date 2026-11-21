@@ -1,7 +1,15 @@
 import tempfile
+from typing import Any
 
 from strands import Agent
 from jinja2 import Template
+
+try:
+    from strands.hooks import BeforeInvocationEvent, HookProvider, HookRegistry
+except ImportError:  # pragma: no cover - older strands-agents releases
+    BeforeInvocationEvent = None  # type: ignore[assignment,misc]
+    HookProvider = object  # type: ignore[assignment,misc]
+    HookRegistry = Any  # type: ignore[assignment,misc]
 
 from strands_code_agent.document_code import get_documentation
 from strands_code_agent.python_environments.local_sandboxed import SandboxedPythonInterpreter
@@ -34,6 +42,44 @@ You can use the following Domain Specific Code:
 """)
 
 DEFAULT_CODE_AGENT_CALLBACK_HANDLER = CodeAgentCallbackHandler()
+
+
+class RejectCallerToolUseHook(HookProvider):
+    """Reject caller-supplied ``toolUse`` blocks before event-loop execution.
+
+    In Strands SDK, passing a trailing ``toolUse`` block as agent input causes
+    the event loop to dispatch the tool directly without invoking the model
+    (the CoreBreak / CVE-2026-18830 pattern when exposed via unvalidated
+    callers). Attaching this hook on ``BeforeInvocationEvent`` blocks any
+    invocation whose ``"user"`` messages or trailing incoming message carry a
+    ``toolUse`` content block.
+    """
+
+    def register_hooks(self, registry: "HookRegistry", **kwargs: Any) -> None:
+        if BeforeInvocationEvent is not None:
+            registry.add_callback(BeforeInvocationEvent, self._validate_messages)
+
+    def _validate_messages(self, event: Any) -> None:
+        messages = getattr(event, "messages", None)
+        if not isinstance(messages, list) or not messages:
+            return
+        has_user_tool_use = any(
+            isinstance(block, dict) and "toolUse" in block
+            for msg in messages
+            if isinstance(msg, dict) and msg.get("role") == "user"
+            for block in (msg.get("content") or [])
+        )
+        last = messages[-1]
+        has_trailing_tool_use = isinstance(last, dict) and any(
+            isinstance(block, dict) and "toolUse" in block
+            for block in (last.get("content") or [])
+        )
+        if has_user_tool_use or has_trailing_tool_use:
+            raise ValueError(
+                "Caller-supplied toolUse blocks are rejected by CodeAgent to "
+                "prevent unmediated tool execution (pass reject_caller_tool_use=False "
+                "to opt out)."
+            )
 
 
 class CodeAgent(Agent):
@@ -71,6 +117,12 @@ class CodeAgent(Agent):
             unrestricted ``exec()``-based). Use :class:`SandboxedPythonInterpreter`
             for import restrictions and sandboxed execution.
 
+        reject_caller_tool_use: If ``True`` (default), attaches
+            :class:`RejectCallerToolUseHook` on ``BeforeInvocationEvent`` so
+            caller-supplied ``toolUse`` blocks cannot bypass model mediation.
+            Set to ``False`` only when intentionally resuming trusted pre-loop
+            ``toolUse`` message payloads.
+
         **kwargs: Additional arguments forwarded to the Strands :class:`Agent` base class
             (e.g. ``model``, ``callback_handler``).
     """
@@ -83,6 +135,7 @@ class CodeAgent(Agent):
                  python_interpreter_class=SandboxedPythonInterpreter,
                  python_interpreter_kwargs:dict|None=None,
                  callback_handler=DEFAULT_CODE_AGENT_CALLBACK_HANDLER,
+                 reject_caller_tool_use:bool=True,
                  **kwargs):
         authorized_imports = set()
         initialization_code = []
@@ -150,6 +203,11 @@ class CodeAgent(Agent):
             tools.append(python_repl_tool)
         else:
             tools = [python_repl_tool]
+
+        if reject_caller_tool_use and BeforeInvocationEvent is not None:
+            hooks = list(kwargs.get("hooks") or [])
+            hooks.append(RejectCallerToolUseHook())
+            kwargs["hooks"] = hooks
 
         kwargs.update({
             "system_prompt": system_prompt,

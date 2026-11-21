@@ -32,6 +32,7 @@ The agent receives a `python_repl` tool automatically and solves tasks by writin
 | `tmp_dir` | `bool` | If `True` (default), creates a temp directory and documents its path in the prompt. |
 | `python_interpreter_class` | `type[PythonInterpreter]` | The interpreter backend. Defaults to `SandboxedPythonInterpreter` (import restrictions via allowlist). Use `ExecPythonInterpreter` for lightweight unrestricted `exec()`-based execution, or `AgentCorePythonInterpreter` for remote execution via AWS. |
 | `python_interpreter_kwargs` | `dict \| None` | Extra keyword arguments forwarded to the interpreter constructor (e.g. `{"region": "us-east-1"}` for `AgentCorePythonInterpreter`). |
+| `reject_caller_tool_use` | `bool` | If `True` (default), registers `RejectCallerToolUseHook` to reject caller-supplied `toolUse` blocks before model mediation. Set `False` only for trusted resume payloads. |
 | `**kwargs` | | Forwarded to the Strands `Agent` base class (e.g. `model`, `callback_handler`). |
 
 ## Toolkit
@@ -337,6 +338,14 @@ python -m pytest tests/test_agentcore_python_interpreter.py -v -k "integration"
 - Environment variable: `AWS_REGION` (defaults to `us-east-1`)
 
 ## Security
+
+### Input Validation for Service / API Wrappers
+
+Because `CodeAgent` exposes a stateful `python_repl` tool, wrapping it behind an HTTP/RPC handler requires strict input validation at your API boundary:
+
+- Pass only `str` prompts or explicitly allowlisted user content blocks (such as `text`, `image`, or `document`) from external callers — never forward arbitrary JSON `Message` or `ContentBlock` dicts directly into `agent(...)`.
+- Under the Strands event loop, a trailing `toolUse` block in caller-supplied input can trigger tool execution directly without invoking the LLM (the "CoreBreak" / CVE-2026-18830 class when unvalidated inputs cross an API boundary).
+- As defense-in-depth, `CodeAgent` enables `reject_caller_tool_use=True` by default (registering `RejectCallerToolUseHook` on `BeforeInvocationEvent` to reject `toolUse` blocks inside `"user"` messages or trailing invocation messages). Pass `reject_caller_tool_use=False` only if you intentionally inject trusted pre-loop `toolUse` payloads.
 
 See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more information.
 
