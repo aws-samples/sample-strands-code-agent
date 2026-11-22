@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "strands-code-agent"
-version = "0.5.0"
+version = "0.6.0"
 description = "A coding agent built on Strands Agents SDK that uses code generation as the primary action interface"
 readme = "README.md"
 license = "MIT-0"
@@ -25,8 +25,9 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
-    "strands-agents>=0.1.0",
-    "smolagents>=1.0.0",
+    "strands-agents>=1.48.0",
+    "mcp>=1.30.0",
+    "smolagents>=1.24.0",
     "jinja2>=3.0",
     "rich>=13.0",
     "pyyaml>=6.0",

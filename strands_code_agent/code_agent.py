@@ -4,12 +4,7 @@ from typing import Any
 from strands import Agent
 from jinja2 import Template
 
-try:
-    from strands.hooks import BeforeInvocationEvent, HookProvider, HookRegistry
-except ImportError:  # pragma: no cover - older strands-agents releases
-    BeforeInvocationEvent = None  # type: ignore[assignment,misc]
-    HookProvider = object  # type: ignore[assignment,misc]
-    HookRegistry = Any  # type: ignore[assignment,misc]
+from strands.hooks import BeforeInvocationEvent, HookProvider, HookRegistry
 
 from strands_code_agent.document_code import get_documentation
 from strands_code_agent.python_environments.local_sandboxed import SandboxedPythonInterpreter
@@ -56,8 +51,7 @@ class RejectCallerToolUseHook(HookProvider):
     """
 
     def register_hooks(self, registry: "HookRegistry", **kwargs: Any) -> None:
-        if BeforeInvocationEvent is not None:
-            registry.add_callback(BeforeInvocationEvent, self._validate_messages)
+        registry.add_callback(BeforeInvocationEvent, self._validate_messages)
 
     def _validate_messages(self, event: Any) -> None:
         messages = getattr(event, "messages", None)
@@ -77,8 +71,8 @@ class RejectCallerToolUseHook(HookProvider):
         if has_user_tool_use or has_trailing_tool_use:
             raise ValueError(
                 "Caller-supplied toolUse blocks are rejected by CodeAgent to "
-                "prevent unmediated tool execution (pass reject_caller_tool_use=False "
-                "to opt out)."
+                "prevent unmediated tool execution. Pass only str prompts or text/image/"
+                "document content blocks."
             )
 
 
@@ -204,7 +198,7 @@ class CodeAgent(Agent):
         else:
             tools = [python_repl_tool]
 
-        if reject_caller_tool_use and BeforeInvocationEvent is not None:
+        if reject_caller_tool_use:
             hooks = list(kwargs.get("hooks") or [])
             hooks.append(RejectCallerToolUseHook())
             kwargs["hooks"] = hooks
