@@ -190,6 +190,8 @@ The library provides three interpreter backends. All share the same interface (`
 
 Local execution with import restrictions. Only modules listed in `authorized_imports` (from Toolkit `libraries`) can be imported.
 
+> **Not a security boundary.** This backend runs on smolagents' `LocalPythonExecutor`, which restricts imports but has had repeated sandbox-escape reports. Do not use it to contain untrusted or prompt-injectable input on a machine with sensitive data or credentials. For isolation use `AgentCorePythonInterpreter`, or run the whole agent inside an OS-level sandbox such as [Strands Box](https://github.com/strands-agents/box) (developer preview).
+
 ```python
 from strands_code_agent import CodeAgent
 
@@ -344,7 +346,7 @@ python -m pytest tests/test_agentcore_python_interpreter.py -v -k "integration"
 Because `CodeAgent` exposes a stateful `python_repl` tool, wrapping it behind an HTTP/RPC handler requires strict input validation at your API boundary:
 
 - Pass only `str` prompts or explicitly allowlisted user content blocks (such as `text`, `image`, or `document`) from external callers — never forward arbitrary JSON `Message` or `ContentBlock` dicts directly into `agent(...)`.
-- Under the Strands event loop, a trailing `toolUse` block in caller-supplied input can trigger tool execution directly without invoking the LLM (the "CoreBreak" / CVE-2026-18830 class when unvalidated inputs cross an API boundary).
+- Under the Strands event loop, a trailing `toolUse` block in caller-supplied input can trigger tool execution directly without invoking the LLM (the "CoreBreak" class, CVE-2026-18830 in the Amazon Bedrock AgentCore harness, which applies when unvalidated inputs cross an API boundary).
 - As defense-in-depth, `CodeAgent` enables `reject_caller_tool_use=True` by default (registering `RejectCallerToolUseHook` on `BeforeInvocationEvent` to reject `toolUse` blocks inside `"user"` messages or trailing invocation messages). Pass `reject_caller_tool_use=False` only if you intentionally inject trusted pre-loop `toolUse` payloads.
 
 See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more information.
